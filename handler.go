@@ -1,10 +1,7 @@
+// package otgrpc provides Opentracing instrumentation for gRPC services
 package otgrpc
 
-//Provides Opentracing instrumentation for gRPC services
-
 import (
-	"fmt"
-
 	context "golang.org/x/net/context"
 
 	"github.com/opentracing/opentracing-go"
@@ -13,6 +10,17 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+const (
+	FailFastKey = "failfast"
+	ClientKey   = "client"
+)
+
+var (
+	GRPCComponentTag = opentracing.Tag{Key: string(ext.Component), Value: "gRPC"}
+)
+
+// TraceHandler is an implementation of grpc.StatsHandler that provides built in trace handling.
+// Use NewTraceHandler to create one.
 type TraceHandler struct {
 	tracer opentracing.Tracer
 	opts   *options
@@ -26,17 +34,22 @@ func NewTraceHandler(tracer opentracing.Tracer, o ...Option) *TraceHandler {
 	}
 }
 
+// TagRPC is called when the RPC begins
 func (th *TraceHandler) TagRPC(ctx context.Context, tagInfo *stats.RPCTagInfo) context.Context {
 	if !th.opts.traceEnabledFunc(tagInfo.FullMethodName) {
 		return ctx
 	}
 
-	spanCtx := extractSpanContext(th.tracer, ctx)
+	spanCtx, err := extractSpanContext(th.tracer, ctx)
+	if err != nil {
+		return ctx
+	}
 	span := th.tracer.StartSpan(tagInfo.FullMethodName, opentracing.FollowsFrom(spanCtx), GRPCComponentTag)
 	newCtx, _ := injectSpanToMetadata(th.tracer, span, ctx)
 	return opentracing.ContextWithSpan(newCtx, span)
 }
 
+// HandleRPC is a catch all for all types of events that can happen during a stream.
 func (th *TraceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	span := opentracing.SpanFromContext(ctx)
 	if span == nil {
@@ -45,29 +58,10 @@ func (th *TraceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 
 	switch t := s.(type) {
 	case *stats.Begin:
-		span.LogFields(log.String(EventKey, "RPC started"))
-	case *stats.InPayload:
-		e := log.String(EventKey, fmt.Sprintf("Payload received: Wire length=%d", t.WireLength))
-		if th.opts.logPayloads {
-			span.LogFields(e, log.Object(PayloadKey, t.Payload))
-		} else {
-			span.LogFields(e)
-		}
-	case *stats.InHeader:
-		span.LogFields(log.String(EventKey, fmt.Sprintf("Header received: Remote addr=%s, Local addr=%s", t.RemoteAddr, t.LocalAddr)))
-	case *stats.InTrailer:
-		span.LogFields(log.String(EventKey, "Trailer received"))
-	case *stats.OutPayload:
-		e := log.String(EventKey, fmt.Sprintf("Payload sent: Wire length=%d", t.WireLength))
-		if th.opts.logPayloads {
-			span.LogFields(e, log.Object(PayloadKey, t.Payload))
-		} else {
-			span.LogFields(e)
-		}
-	case *stats.OutHeader:
-		span.LogFields(log.String(EventKey, fmt.Sprintf("Header sent: Remote addr=%s, Local addr=%s", t.RemoteAddr, t.LocalAddr)))
-	case *stats.OutTrailer:
-		span.LogFields(log.String(EventKey, "Trailer sent"))
+		span.LogFields(
+			log.Bool(ClientKey, t.Client),
+			log.Bool(FailFastKey, t.FailFast),
+		)
 	case *stats.End:
 		if t.IsClient() {
 			span.SetTag(string(ext.SpanKind), ext.SpanKindRPCClientEnum)
@@ -77,9 +71,7 @@ func (th *TraceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 
 		if t.Error != nil {
 			span.SetTag(string(ext.Error), true)
-			span.LogFields(log.String(EventKey, "RPC failed"), log.Error(t.Error))
-		} else {
-			span.LogFields(log.String(EventKey, "RPC ended"))
+			span.LogFields(log.Error(t.Error))
 		}
 		span.Finish()
 	}

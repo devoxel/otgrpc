@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/charithe/otgrpc"
+	"github.com/devoxel/otgrpc"
 	"github.com/opentracing/opentracing-go"
 
 	"google.golang.org/grpc"
@@ -63,7 +63,7 @@ func StartInProcServer(socketPath string, tracer opentracing.Tracer, waitChan ch
 	}
 
 	//server := grpc.NewServer(grpc.StreamInterceptor(otgrpc.StreamServerInterceptor(tracer)), grpc.UnaryInterceptor(otgrpc.UnaryServerInterceptor(tracer)))
-	sh := otgrpc.NewTraceHandler(tracer, otgrpc.WithPayloadLogging())
+	sh := otgrpc.NewTraceHandler(tracer)
 	server := grpc.NewServer(grpc.StatsHandler(sh))
 	RegisterTestSvcServer(server, &TestServer{})
 	waitChan <- server
@@ -77,7 +77,7 @@ func GetInProcClient(socketPath string, tracer opentracing.Tracer) TestSvcClient
 		return net.DialUnix("unix", nil, &net.UnixAddr{Name: addr, Net: "unix"})
 	}
 
-	sh := otgrpc.NewTraceHandler(tracer, otgrpc.WithPayloadLogging())
+	sh := otgrpc.NewTraceHandler(tracer)
 	conn, err := grpc.Dial(socketPath,
 		grpc.WithDialer(dialFunc),
 		grpc.WithInsecure(),

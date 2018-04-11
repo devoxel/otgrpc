@@ -1,29 +1,14 @@
 Go gRPC Opentracing Instrumentation
 ===================================
 
-[![GoDoc](https://godoc.org/github.com/charithe/otgrpc?status.svg)](https://godoc.org/github.com/charithe/otgrpc)
+[![GoDoc](https://godoc.org/github.com/devoxel/otgrpc?status.svg)](https://godoc.org/github.com/devoxel/otgrpc)
 
-An attempt to use [Opentracing](http://opentracing.io/) with [gRPC](http://grpc.io) services. The official
-[grpc-opentracing](https://github.com/grpc-ecosystem/grpc-opentracing) library currently only supports tracing
-unary calls. This library makes use of gRPC `stats.Handler` interface to add tracing to gRPC streams as well.
+As opposed to using ClientInterceptors, use GRPC's StatsHandlers, as done in [ocgrpc]("https://github.com/census-instrumentation/opencensus-go/tree/master/plugin/ocgrpc").
 
-
-The obvious approach to add tracing would be to make use of gRPC interceptors. However, the current interceptor 
-interfaces lack the fuctionality to effectively add tracing information to the calls. Go gRPC has a built-in tracing 
-mechanism that hooks into `x/net/trace`, but, the captured data is not accessible from external code. This leads us to
-the `stats.Handler` interface which is primarily designed for stats gathering but, in the process, gives us access to 
-all interesting events that happen during a RPC -- which can be used to gather the tracing information we need. 
-
+See GitHub's fork information for history. This fork specifically cuts down on logging (to avoid stream spans growing too large).
 
 Usage
 -----
-
-Grab the library:
-
-```
-go get github.com/charithe/otgrpc
-```
-
 
 Client side:
 
@@ -32,7 +17,6 @@ tracer := // Tracer implementation
 
 th := otgrpc.NewTraceHandler(tracer)
 conn, err := grpc.Dial(address, grpc.WithStatsHandler(th))
-...
 ```
 
 Server side:
@@ -42,7 +26,6 @@ tracer := // Tracer implementation
 
 th := otgrpc.NewTraceHandler(tracer)
 server := grpc.NewServer(grpc.StatsHandler(th))
-...
 ```
 
 ### Options
@@ -56,10 +39,3 @@ tf := func(method string) bool {
 
 th := otgrpc.NewTraceHandler(tracer, orgrpc.WithTraceEnabledFunc(tf))
 ```
-
-Attach payloads as Span log events
-
-```go
-th := otgrpc.NewTraceHandler(tracer, otgrpc.WithPayloadLogging())
-```
-

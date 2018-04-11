@@ -1,4 +1,4 @@
-ROOT_PKG:=github.com/charithe/otgrpc
+ROOT_PKG:=github.com/devoxel/otgrpc
 PROTO_PKG:=test
 
 .PHONY: test

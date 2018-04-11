@@ -6,25 +6,14 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 )
 
-const (
-	EventKey   = "event"
-	PayloadKey = "payload"
-)
-
-var GRPCComponentTag = opentracing.Tag{Key: string(ext.Component), Value: "gRPC"}
-
-func extractSpanContext(tracer opentracing.Tracer, ctx context.Context) opentracing.SpanContext {
-	var sc opentracing.SpanContext
-	sc = spanContextFromContext(ctx)
+func extractSpanContext(tracer opentracing.Tracer, ctx context.Context) (opentracing.SpanContext, error) {
+	sc := spanContextFromContext(ctx)
 	if sc != nil {
-		return sc
+		return sc, nil
 	}
-
-	sc = extractSpanContextFromMetadata(tracer, ctx)
-	return sc
+	return extractSpanContextFromMetadata(tracer, ctx)
 }
 
 func spanContextFromContext(ctx context.Context) opentracing.SpanContext {
@@ -35,29 +24,20 @@ func spanContextFromContext(ctx context.Context) opentracing.SpanContext {
 }
 
 func injectSpanToMetadata(tracer opentracing.Tracer, span opentracing.Span, ctx context.Context) (context.Context, error) {
-	var md metadata.MD
-	if tmpMD, ok := metadata.FromOutgoingContext(ctx); ok {
-		md = tmpMD.Copy()
-	} else {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
 		md = metadata.New(nil)
 	}
-
 	if err := tracer.Inject(span.Context(), opentracing.HTTPHeaders, NewMetadataReaderWriter(md)); err != nil {
 		return ctx, err
 	}
-
 	return metadata.NewOutgoingContext(ctx, md), nil
 }
 
-func extractSpanContextFromMetadata(tracer opentracing.Tracer, ctx context.Context) opentracing.SpanContext {
-	var md metadata.MD
-	if tmpMD, ok := metadata.FromIncomingContext(ctx); ok {
-		md = tmpMD
-	} else {
+func extractSpanContextFromMetadata(tracer opentracing.Tracer, ctx context.Context) (opentracing.SpanContext, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
 		md = metadata.New(nil)
 	}
-
-	// TODO How to deal with errors from Extract
-	spanContext, _ := tracer.Extract(opentracing.HTTPHeaders, NewMetadataReaderWriter(md))
-	return spanContext
+	return tracer.Extract(opentracing.HTTPHeaders, NewMetadataReaderWriter(md))
 }

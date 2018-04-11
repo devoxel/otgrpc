@@ -4,7 +4,6 @@ type Option func(*options)
 
 type options struct {
 	traceEnabledFunc func(method string) bool
-	logPayloads      bool
 }
 
 func newOptions(opts ...Option) *options {
@@ -23,12 +22,5 @@ func newOptions(opts ...Option) *options {
 func WithTraceEnabledFunc(f func(method string) bool) Option {
 	return func(opt *options) {
 		opt.traceEnabledFunc = f
-	}
-}
-
-//WithPayloadLogging enables logging of RPC payloads
-func WithPayloadLogging() Option {
-	return func(opt *options) {
-		opt.logPayloads = true
 	}
 }
