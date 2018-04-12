@@ -22,21 +22,26 @@ var (
 // TraceHandler is an implementation of grpc.StatsHandler that provides built in trace handling.
 // Use NewTraceHandler to create one.
 type TraceHandler struct {
-	tracer opentracing.Tracer
-	opts   *options
+	tracer   opentracing.Tracer
+	opts     *options
+	disabled bool
 }
 
 // NewTraceHandler creates a gRPC stats.Handler instance that instruments RPCs with Opentracing trace contexts
 func NewTraceHandler(tracer opentracing.Tracer, o ...Option) *TraceHandler {
-	return &TraceHandler{
+	th := &TraceHandler{
 		tracer: tracer,
 		opts:   newOptions(o...),
 	}
+	if _, ok := tracer.(opentracing.NoopTracer); ok {
+		th.disabled = true
+	}
+	return th
 }
 
 // TagRPC is called when the RPC begins
 func (th *TraceHandler) TagRPC(ctx context.Context, tagInfo *stats.RPCTagInfo) context.Context {
-	if !th.opts.traceEnabledFunc(tagInfo.FullMethodName) {
+	if th.disabled || !th.opts.traceEnabledFunc(tagInfo.FullMethodName) {
 		return ctx
 	}
 
@@ -51,6 +56,9 @@ func (th *TraceHandler) TagRPC(ctx context.Context, tagInfo *stats.RPCTagInfo) c
 
 // HandleRPC is a catch all for all types of events that can happen during a stream.
 func (th *TraceHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	if th.disabled {
+		return
+	}
 	span := opentracing.SpanFromContext(ctx)
 	if span == nil {
 		return
